@@ -2,9 +2,9 @@
 import argparse
 import json
 import os
-import re
+# import re
 import subprocess
-import requests
+# import requests
 
 class DockerDockergo:
     def __init__(self):
@@ -102,53 +102,53 @@ class DockerDockergo:
             print(f'Error: {e}')
 
 
-    def replace_image_names(self):
-        if not self.replace_dir:
-            return
+    # def replace_image_names(self):
+    #     if not self.replace_dir:
+    #         return
 
-        if not self.harbor_url or not self.harbor_project:
-            print('Error: Harbor URL and project name must be set to replace image names')
-            return
+    #     if not self.harbor_url or not self.harbor_project:
+    #         print('Error: Harbor URL and project name must be set to replace image names')
+    #         return
 
-        # Get list of images in Harbor registry
-        harbor_images = []
-        url = f'http://{self.harbor_url}/api/v2.0/projects/{self.harbor_project}/repositories'
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            for item in data:
-                harbor_images.append(item['name'])
+    #     # Get list of images in Harbor registry
+    #     harbor_images = []
+    #     url = f'http://{self.harbor_url}/api/v2.0/projects/{self.harbor_project}/repositories'
+    #     response = requests.get(url)
+    #     if response.status_code == 200:
+    #         data = response.json()
+    #         for item in data:
+    #             harbor_images.append(item['name'])
 
-        # Get list of files in replace directory
-        replacements = []
-        for dirpath, dirnames, filenames in os.walk(self.replace_dir):
-            for filename in filenames:
-                file_path = os.path.join(dirpath, filename)
+    #     # Get list of files in replace directory
+    #     replacements = []
+    #     for dirpath, dirnames, filenames in os.walk(self.replace_dir):
+    #         for filename in filenames:
+    #             file_path = os.path.join(dirpath, filename)
 
-                # Read file content
-                with open(file_path, 'r') as f:
-                    content = f.read()
+    #             # Read file content
+    #             with open(file_path, 'r') as f:
+    #                 content = f.read()
 
-                # Replace image names in file content
-                new_content = re.sub(r'(\b\S+\.\S+\/)', lambda match: f'{self.harbor_url}/{self.harbor_project}/{match.group(1)}' if match.group(1) in harbor_images else match.group(0), content)
+    #             # Replace image names in file content
+    #             new_content = re.sub(r'(\b\S+\.\S+\/)', lambda match: f'{self.harbor_url}/{self.harbor_project}/{match.group(1)}' if match.group(1) in harbor_images else match.group(0), content)
 
-                if new_content != content:
-                    replacements.append(file_path)
+    #             if new_content != content:
+    #                 replacements.append(file_path)
 
-                    print(f'Replacements for {file_path}:')
-                    for line in new_content.split('\n'):
-                        if line not in content.split('\n'):
-                            print(f'- {line}')
+    #                 print(f'Replacements for {file_path}:')
+    #                 for line in new_content.split('\n'):
+    #                     if line not in content.split('\n'):
+    #                         print(f'- {line}')
 
-                    confirm = input('Confirm replacements (y/n): ')
-                    if confirm.lower() == 'y':
-                        # Write updated content to file
-                        with open(file_path, 'w') as f:
-                            f.write(new_content)
+    #                 confirm = input('Confirm replacements (y/n): ')
+    #                 if confirm.lower() == 'y':
+    #                     # Write updated content to file
+    #                     with open(file_path, 'w') as f:
+    #                         f.write(new_content)
 
-        print(f'Total replacements: {len(replacements)}')
-        for file_path in replacements:
-            print(f'- {file_path}')
+    #     print(f'Total replacements: {len(replacements)}')
+    #     for file_path in replacements:
+    #         print(f'- {file_path}')
 
 
     def setup_completion_script(self):
@@ -188,7 +188,7 @@ def main():
     parser.add_argument('-p', '--project', help='Harbor project name')
     parser.add_argument('-f', '--file', help='Path to tar file containing images')
     parser.add_argument('-A', action='store_true', help='Push all images')
-    parser.add_argument('-R', '--replace_dir', help='Directory containing files to replace image names in')
+    # parser.add_argument('-R', '--replace_dir', help='Directory containing files to replace image names in')
     parser.add_argument('-s', action='store_true', help='Setup shell completion script')
     args = parser.parse_args()
 
@@ -209,15 +209,15 @@ def main():
       dockerdockergo.a()
       dockerdockergo.push_images()
 
-    if args.replace_dir:
-      dockerdockergo.r(args.replace_dir)
-      dockerdockergo.replace_image_names()
+    # if args.replace_dir:
+    #   dockerdockergo.r(args.replace_dir)
+    #   dockerdockergo.replace_image_names()
 
     if args.s:
       dockerdockergo.s()
     
     if not any(vars(args).values()):
-        subprocess.run(['dockerdockergo', '-h'], check=True)
+        subprocess.run(['dockerdockergo', '-f'], check=True)
 
     if dockerdockergo.setup_completion:
       dockerdockergo.setup_completion_script()
