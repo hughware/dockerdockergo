@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import re
+import subprocess
+import requests
+
+class DockerDockergo:
+    def __init__(self):
+        self.config_file = os.path.expanduser('/root/.dockerdockergo.json')
+        self.harbor_url = None
+        self.harbor_project = None
+        self.tar_file = None
+        self.all_images = False
+        self.replace_dir = None
+        self.setup_completion = False
+
+    def load_config(self):
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+                self.harbor_url = config.get('harbor_url')
+                self.harbor_project = config.get('harbor_project')
+
+
+    def save_config(self):
+        config = {
+            'harbor_url': self.harbor_url,
+            'harbor_project': self.harbor_project,
+        }
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f)
+
+
+    def url(self, harbor_url):
+        self.harbor_url = harbor_url
+
+    def p(self, harbor_project):
+        self.harbor_project = harbor_project
+
+    def f(self, tar_file):
+        self.tar_file = tar_file
+
+    def a(self):
+        self.all_images = True
+
+    def r(self, replace_dir):
+        self.replace_dir = replace_dir
+
+    def s(self):
+        self.setup_completion = True
+
+    def push_images(self):
+        if not self.harbor_url:
+            self.harbor_url = input('Enter Harbor URL (without http://): ')
+
+        if not self.harbor_project:
+            self.harbor_project = input('Enter Harbor project name: ')
+
+        if not self.tar_file:
+            self.tar_file = input('Enter path to tar file: ')
+
+        print(f'Harbor URL: {self.harbor_url}')
+        print(f'Harbor project name: {self.harbor_project}')
+        print(f'Harbor tarfile name: {self.tar_file}')
+
+        confirm = input('Confirm settings (y/n): ')
+        if confirm.lower() != 'y':
+            return
+
+        try:
+            # Login to Harbor
+            subprocess.run(['docker', 'login', f'http://{self.harbor_url}'], check=True)
+            
+            if self.all_images:
+                # Get list of all image names
+                print("all")
+                image_names = subprocess.check_output(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}']).decode().split('\n')
+            else:
+                # Load images from tar file
+                load_output = subprocess.check_output(['docker', 'load', '-i', self.tar_file]).decode()
+
+                # Get list of loaded image names
+                image_names = []
+                for line in load_output.split('\n'):
+                    if 'Loaded image:' in line:
+                        image_name = line.split('Loaded image: ')[1]
+                        image_names.append(image_name)
+
+            # Loop through image names
+            for image_name in image_names:
+                if not image_name:
+                    continue
+
+                # Tag image with Harbor URL and project name
+                subprocess.run(['docker', 'tag', image_name, f'{self.harbor_url}/{self.harbor_project}/{image_name}'], check=True)
+
+                # Push image to Harbor
+                subprocess.run(['docker', 'push', f'{self.harbor_url}/{self.harbor_project}/{image_name}'], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f'Error: {e}')
+
+
+    def replace_image_names(self):
+        if not self.replace_dir:
+            return
+
+        if not self.harbor_url or not self.harbor_project:
+            print('Error: Harbor URL and project name must be set to replace image names')
+            return
+
+        # Get list of images in Harbor registry
+        harbor_images = []
+        url = f'http://{self.harbor_url}/api/v2.0/projects/{self.harbor_project}/repositories'
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            for item in data:
+                harbor_images.append(item['name'])
+
+        # Get list of files in replace directory
+        replacements = []
+        for dirpath, dirnames, filenames in os.walk(self.replace_dir):
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+
+                # Read file content
+                with open(file_path, 'r') as f:
+                    content = f.read()
+
+                # Replace image names in file content
+                new_content = re.sub(r'(\b\S+\.\S+\/)', lambda match: f'{self.harbor_url}/{self.harbor_project}/{match.group(1)}' if match.group(1) in harbor_images else match.group(0), content)
+
+                if new_content != content:
+                    replacements.append(file_path)
+
+                    print(f'Replacements for {file_path}:')
+                    for line in new_content.split('\n'):
+                        if line not in content.split('\n'):
+                            print(f'- {line}')
+
+                    confirm = input('Confirm replacements (y/n): ')
+                    if confirm.lower() == 'y':
+                        # Write updated content to file
+                        with open(file_path, 'w') as f:
+                            f.write(new_content)
+
+        print(f'Total replacements: {len(replacements)}')
+        for file_path in replacements:
+            print(f'- {file_path}')
+
+
+    def setup_completion_script(self):
+        completion_script = '''_dockerdockergo()
+    {
+        local cur prev words cword
+        _init_completion || return
+
+        case $prev in
+            -f|-R)
+                _filedir
+                return
+                ;;
+        esac
+
+        COMPREPLY=()
+    }
+    complete -F _dockerdockergo dockerdockergo'''
+
+        bashrc_path = os.path.expanduser('~/.bashrc')
+        with open(bashrc_path, 'r') as f:
+            bashrc_content = f.read()
+
+        if '_dockerdockergo' not in bashrc_content:
+            # Add completion script to .bashrc file
+            with open(bashrc_path, 'a') as f:
+                f.write('\n\n')
+                f.write(completion_script)
+                print('Completion script added to .bashrc')
+        else:
+            # If completion script already exists in .bashrc, do nothing
+            print('Completion script already exists in .bashrc')
+
+def main():
+    parser = argparse.ArgumentParser(description='Push images to a Harbor registry and replace image names in files.')
+    parser.add_argument('-u', '--url', help='Harbor URL (without http://)')
+    parser.add_argument('-p', '--project', help='Harbor project name')
+    parser.add_argument('-f', '--file', help='Path to tar file containing images')
+    parser.add_argument('-A', action='store_true', help='Push all images')
+    parser.add_argument('-R', '--replace_dir', help='Directory containing files to replace image names in')
+    parser.add_argument('-s', action='store_true', help='Setup shell completion script')
+    args = parser.parse_args()
+
+    dockerdockergo = DockerDockergo()
+    dockerdockergo.load_config()
+
+    if args.url:
+      dockerdockergo.url(args.url)
+
+    if args.project:
+      dockerdockergo.p(args.project)
+
+    if args.file:
+      dockerdockergo.f(args.file)
+      dockerdockergo.push_images()
+
+    if args.A:
+      dockerdockergo.a()
+      dockerdockergo.push_images()
+
+    if args.replace_dir:
+      dockerdockergo.r(args.replace_dir)
+      dockerdockergo.replace_image_names()
+
+    if args.s:
+      dockerdockergo.s()
+    
+    if not any(vars(args).values()):
+        subprocess.run(['dockerdockergo', '-h'], check=True)
+
+    if dockerdockergo.setup_completion:
+      dockerdockergo.setup_completion_script()
+
+    dockerdockergo.save_config()
+
+if __name__ == '__main__':
+    main()
