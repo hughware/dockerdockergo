@@ -29,11 +29,6 @@ dockerdockergo -h 192.168.200.30 -p k8s -f /root/image.tar
 - -p your harbor project
 - -f your tar file path  
 
-`more tar file?`
-
-```bash
-dockerdockergo -f {/root/image1.tar,/root/image2.tar}
-```
 
 `The -h option and the -p option, This information will be saved in the /root/.dockerdockergo.json file.`
 
